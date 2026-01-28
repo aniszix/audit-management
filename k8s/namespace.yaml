@@ -1,0 +1,10 @@
+# ===========================================
+# Namespace - Audit Management
+# ===========================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: audit-app
+  labels:
+    app: audit-management
+    environment: production

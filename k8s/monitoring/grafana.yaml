@@ -1,0 +1,321 @@
+# ===========================================
+# Grafana - Configuration Kubernetes
+# ===========================================
+
+# ============ ConfigMap Grafana Datasources ============
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: audit-app
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-service:9090
+        isDefault: true
+        editable: true
+
+---
+# ============ ConfigMap Grafana Dashboards Provider ============
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: audit-app
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+
+---
+# ============ ConfigMap Dashboard Spring Boot ============
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-springboot
+  namespace: audit-app
+data:
+  springboot-dashboard.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "red", "value": 80}
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+          "id": 1,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "title": "Application Status",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "up{job=\"audit-management\"}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent"
+            }
+          },
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+          "id": 2,
+          "title": "CPU Usage",
+          "type": "gauge",
+          "targets": [
+            {
+              "expr": "process_cpu_usage{job=\"audit-management\"} * 100",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            }
+          },
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+          "id": 3,
+          "title": "Memory Used",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "jvm_memory_used_bytes{job=\"audit-management\", area=\"heap\"}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            }
+          },
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+          "id": 4,
+          "title": "HTTP Requests (Total)",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(http_server_requests_seconds_count{job=\"audit-management\"})",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+          "id": 5,
+          "title": "HTTP Request Rate",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "rate(http_server_requests_seconds_count{job=\"audit-management\"}[1m])",
+              "legendFormat": "{{method}} {{uri}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            }
+          },
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+          "id": 6,
+          "title": "Response Time (Avg)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "rate(http_server_requests_seconds_sum{job=\"audit-management\"}[1m]) / rate(http_server_requests_seconds_count{job=\"audit-management\"}[1m])",
+              "legendFormat": "{{method}} {{uri}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+          "id": 7,
+          "title": "JVM Memory",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "jvm_memory_used_bytes{job=\"audit-management\"}",
+              "legendFormat": "{{area}} - {{id}}",
+              "refId": "A"
+            }
+          ]
+        }
+      ],
+      "refresh": "5s",
+      "schemaVersion": 38,
+      "style": "dark",
+      "tags": ["spring-boot", "audit-management"],
+      "templating": {"list": []},
+      "time": {"from": "now-1h", "to": "now"},
+      "title": "Audit Management - Spring Boot Dashboard",
+      "uid": "audit-springboot",
+      "version": 1
+    }
+
+---
+# ============ Deployment Grafana ============
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: audit-app
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.2.2
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin123"
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboards-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboards-provider
+          configMap:
+            name: grafana-dashboards-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboard-springboot
+
+---
+# ============ Service Grafana ============
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: audit-app
+  labels:
+    app: grafana
+spec:
+  type: NodePort
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30030

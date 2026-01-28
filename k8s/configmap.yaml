@@ -1,0 +1,30 @@
+# ===========================================
+# ConfigMap - Configuration de l'application
+# ===========================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audit-management-config
+  namespace: audit-app
+  labels:
+    app: audit-management
+data:
+  # Profil Spring
+  SPRING_PROFILES_ACTIVE: "prod"
+  
+  # Configuration serveur
+  SERVER_PORT: "8081"
+  
+  # Configuration base de données
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "auditdb"
+  
+  # Configuration JPA
+  SPRING_JPA_SHOW_SQL: "false"
+  SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+  
+  # Configuration Actuator (pour monitoring)
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus,metrics"
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "always"
+  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: "true"

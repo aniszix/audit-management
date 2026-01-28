@@ -1,5 +1,6 @@
 // ===========================================
-// Jenkinsfile - Pipeline CI/CD pour Audit Management
+// Jenkinsfile - Pipeline CI/CD Complet
+// Backend Spring Boot → Kubernetes
 // ===========================================
 
 pipeline {
@@ -14,75 +15,62 @@ pipeline {
     // Variables d'environnement
     environment {
         APP_NAME = 'audit-management'
-        DOCKER_IMAGE = "audit-management"
+        DOCKER_REGISTRY = 'docker.io'
+        DOCKER_IMAGE = "${DOCKER_REGISTRY}/YOUR_DOCKERHUB_USERNAME/audit-management"
         DOCKER_TAG = "${BUILD_NUMBER}"
         SONAR_HOST = 'https://sonarcloud.io'
+        SONAR_PROJECT_KEY = 'audit-management'
+        SONAR_ORGANIZATION = 'your-organization'
         // Credentials (à configurer dans Jenkins)
         SONAR_TOKEN = credentials('sonarcloud-token')
-        DOCKER_REGISTRY = credentials('docker-registry')
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        KUBECONFIG_CREDENTIALS = credentials('kubeconfig')
     }
 
     // Options du pipeline
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
-        timeout(time: 30, unit: 'MINUTES')
+        timeout(time: 45, unit: 'MINUTES')
         disableConcurrentBuilds()
+    }
+
+    // Déclencheur automatique
+    triggers {
+        pollSCM('H/5 * * * *')  // Vérifie toutes les 5 minutes
     }
 
     stages {
         // ============ Stage 1: Checkout ============
-        stage('Checkout') {
+        stage('📥 Checkout') {
             steps {
-                echo '📥 Récupération du code source...'
+                echo '📥 Récupération du code source depuis Git...'
                 checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.GIT_BRANCH_NAME = sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
+                }
+                echo "Branch: ${env.GIT_BRANCH_NAME}, Commit: ${env.GIT_COMMIT_SHORT}"
             }
         }
 
-        // ============ Stage 2: Build ============
-        stage('Build') {
+        // ============ Stage 2: Build Maven ============
+        stage('🔨 Build') {
             steps {
-                echo '🔨 Compilation du projet...'
-                sh 'mvn clean compile -DskipTests'
+                echo '🔨 Compilation du projet Maven...'
+                sh 'mvn clean compile -DskipTests -B'
             }
         }
 
-        // ============ Stage 3: Tests Unitaires ============
-        stage('Unit Tests') {
+        // ============ Stage 3: Tests Unitaires + JaCoCo ============
+        stage('🧪 Tests Unitaires') {
             steps {
-                echo '🧪 Exécution des tests unitaires...'
-                sh 'mvn test'
+                echo '🧪 Exécution des tests unitaires avec couverture JaCoCo...'
+                sh 'mvn test -B'
             }
             post {
                 always {
-                    // Publication des résultats de tests
-                    junit '**/target/surefire-reports/*.xml'
-                }
-            }
-        }
-
-        // ============ Stage 4: Tests d'Intégration ============
-        stage('Integration Tests') {
-            steps {
-                echo '🔗 Exécution des tests d\'intégration...'
-                sh 'mvn verify -DskipUnitTests'
-            }
-            post {
-                always {
-                    junit '**/target/failsafe-reports/*.xml'
-                }
-            }
-        }
-
-        // ============ Stage 5: Couverture de Code ============
-        stage('Code Coverage') {
-            steps {
-                echo '📊 Génération du rapport de couverture...'
-                sh 'mvn jacoco:report'
-            }
-            post {
-                success {
-                    // Publication du rapport JaCoCo
+                    junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
                     jacoco(
                         execPattern: '**/target/jacoco.exec',
                         classPattern: '**/target/classes',
@@ -93,37 +81,51 @@ pipeline {
             }
         }
 
-        // ============ Stage 6: Analyse SonarCloud ============
-        stage('SonarCloud Analysis') {
+        // ============ Stage 4: Tests d'Intégration ============
+        stage('🔗 Tests Intégration') {
             steps {
-                echo '🔍 Analyse de la qualité du code avec SonarCloud...'
-                withSonarQubeEnv('SonarCloud') {
-                    sh '''
-                        mvn sonar:sonar \
-                            -Dsonar.projectKey=audit-management \
-                            -Dsonar.organization=your-organization \
-                            -Dsonar.host.url=${SONAR_HOST} \
-                            -Dsonar.login=${SONAR_TOKEN}
-                    '''
+                echo '🔗 Exécution des tests d\'intégration...'
+                sh 'mvn verify -DskipUnitTests -B'
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: '**/target/failsafe-reports/*.xml'
                 }
             }
         }
 
-        // ============ Stage 7: Quality Gate ============
-        stage('Quality Gate') {
+        // ============ Stage 5: Analyse SonarCloud ============
+        stage('🔍 SonarCloud') {
             steps {
-                echo '✅ Vérification du Quality Gate...'
-                timeout(time: 5, unit: 'MINUTES') {
+                echo '🔍 Analyse de la qualité du code avec SonarCloud...'
+                withSonarQubeEnv('SonarCloud') {
+                    sh """
+                        mvn sonar:sonar \
+                            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                            -Dsonar.organization=${SONAR_ORGANIZATION} \
+                            -Dsonar.host.url=${SONAR_HOST} \
+                            -Dsonar.login=${SONAR_TOKEN} \
+                            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                    """
+                }
+            }
+        }
+
+        // ============ Stage 6: Quality Gate ============
+        stage('✅ Quality Gate') {
+            steps {
+                echo '✅ Vérification du Quality Gate SonarCloud...'
+                timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        // ============ Stage 8: Package ============
-        stage('Package') {
+        // ============ Stage 7: Package JAR ============
+        stage('📦 Package') {
             steps {
                 echo '📦 Création du package JAR...'
-                sh 'mvn package -DskipTests'
+                sh 'mvn package -DskipTests -B'
             }
             post {
                 success {
@@ -132,8 +134,8 @@ pipeline {
             }
         }
 
-        // ============ Stage 9: Docker Build ============
-        stage('Docker Build') {
+        // ============ Stage 8: Docker Build ============
+        stage('🐳 Docker Build') {
             steps {
                 echo '🐳 Construction de l\'image Docker...'
                 script {
@@ -143,15 +145,18 @@ pipeline {
             }
         }
 
-        // ============ Stage 10: Docker Push (optionnel) ============
-        stage('Docker Push') {
+        // ============ Stage 9: Docker Push ============
+        stage('🚀 Docker Push') {
             when {
-                branch 'main'
+                anyOf {
+                    branch 'main'
+                    branch 'develop'
+                }
             }
             steps {
-                echo '🚀 Publication de l\'image Docker...'
+                echo '🚀 Publication de l\'image sur Docker Hub...'
                 script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker-registry') {
+                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
                         docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push()
                         docker.image("${DOCKER_IMAGE}:latest").push()
                     }
@@ -159,18 +164,60 @@ pipeline {
             }
         }
 
-        // ============ Stage 11: Deploy (optionnel) ============
-        stage('Deploy to Staging') {
+        // ============ Stage 10: Deploy to Kubernetes ============
+        stage('☸️ Deploy Kubernetes') {
             when {
-                branch 'develop'
+                anyOf {
+                    branch 'main'
+                    branch 'develop'
+                }
             }
             steps {
-                echo '🌐 Déploiement en staging...'
-                // Exemple de déploiement avec docker-compose
-                sh '''
-                    docker-compose -f docker-compose.yml down || true
-                    docker-compose -f docker-compose.yml up -d
-                '''
+                echo '☸️ Déploiement sur Kubernetes...'
+                script {
+                    // Mise à jour de l'image dans le deployment
+                    sh """
+                        sed -i 's|image:.*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|g' k8s/deployment.yaml
+                    """
+                    
+                    // Appliquer les manifests Kubernetes
+                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                        sh '''
+                            kubectl apply -f k8s/namespace.yaml
+                            kubectl apply -f k8s/configmap.yaml
+                            kubectl apply -f k8s/secret.yaml
+                            kubectl apply -f k8s/deployment.yaml
+                            kubectl apply -f k8s/service.yaml
+                            kubectl rollout status deployment/audit-management -n audit-app --timeout=120s
+                        '''
+                    }
+                }
+            }
+        }
+
+        // ============ Stage 11: Smoke Test ============
+        stage('🔥 Smoke Test') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'develop'
+                }
+            }
+            steps {
+                echo '🔥 Test de fumée post-déploiement...'
+                script {
+                    // Attendre que l'application soit prête
+                    sleep(30)
+                    
+                    // Test basique de santé
+                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                        sh '''
+                            NODEPORT=$(kubectl get svc audit-management-service -n audit-app -o jsonpath='{.spec.ports[0].nodePort}')
+                            NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+                            curl -f http://${NODE_IP}:${NODEPORT}/actuator/health || exit 1
+                        '''
+                    }
+                }
             }
         }
     }
@@ -178,17 +225,18 @@ pipeline {
     // Actions post-pipeline
     post {
         always {
-            echo '🧹 Nettoyage...'
+            echo '🧹 Nettoyage de l\'espace de travail...'
             cleanWs()
         }
         success {
-            echo '✅ Pipeline terminé avec succès!'
-            // Notification Slack/Teams (à configurer)
-            // slackSend channel: '#builds', color: 'good', message: "Build ${BUILD_NUMBER} réussi!"
+            echo '✅ =========================================='
+            echo '✅ Pipeline terminé avec SUCCÈS!'
+            echo '✅ =========================================='
         }
         failure {
-            echo '❌ Pipeline échoué!'
-            // slackSend channel: '#builds', color: 'danger', message: "Build ${BUILD_NUMBER} échoué!"
+            echo '❌ =========================================='
+            echo '❌ Pipeline ÉCHOUÉ!'
+            echo '❌ =========================================='
         }
     }
 }

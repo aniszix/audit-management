@@ -1,0 +1,39 @@
+# ===========================================
+# Service - Expose le Backend
+# ===========================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-management-service
+  namespace: audit-app
+  labels:
+    app: audit-management
+spec:
+  type: NodePort
+  selector:
+    app: audit-management
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8081
+      targetPort: 8081
+      nodePort: 30081  # Port exposé sur le nœud (30000-32767)
+
+---
+# ===========================================
+# Service - PostgreSQL (interne)
+# ===========================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: audit-app
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
