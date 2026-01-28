@@ -1,0 +1,31 @@
+# ===========================================
+# Configuration commune - Audit Management
+# ===========================================
+spring:
+  application:
+    name: audit-management
+  profiles:
+    active: prod  # Profil production avec PostgreSQL
+
+# Port du serveur
+server:
+  port: 8081
+
+# Configuration OpenAPI / Swagger
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operationsSorter: method
+
+# Actuator - endpoints de monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized

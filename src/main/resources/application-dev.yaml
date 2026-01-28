@@ -1,0 +1,34 @@
+# ===========================================
+# Profil DEV - Base de données H2 en mémoire
+# ===========================================
+spring:
+  datasource:
+    url: jdbc:h2:mem:auditdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  # Console H2 activée en dev
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: false
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop  # Recrée le schéma à chaque démarrage
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# Logs détaillés en dev
+logging:
+  level:
+    com.example.audit: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

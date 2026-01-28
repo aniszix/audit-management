@@ -1,0 +1,44 @@
+# ===========================================
+# .dockerignore - Fichiers à exclure du build Docker
+# ===========================================
+
+# Répertoires de build
+target/
+build/
+out/
+
+# Fichiers IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# Fichiers de configuration locaux
+*.env.local
+.env
+
+# Logs
+*.log
+logs/
+
+# Tests
+src/test/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+Jenkinsfile
+.github/
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore

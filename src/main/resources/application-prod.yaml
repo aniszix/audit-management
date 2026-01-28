@@ -1,0 +1,38 @@
+# ===========================================
+# Profil PROD - Base de données PostgreSQL
+# ===========================================
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:auditdb}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+  # Console H2 désactivée en prod
+  h2:
+    console:
+      enabled: false
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update  # Crée/met à jour les tables automatiquement
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# Configuration Swagger désactivée en prod (optionnel)
+springdoc:
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+
+# Logs de production
+logging:
+  level:
+    com.example.audit: INFO
+    org.springframework.web: WARN
+    org.hibernate: WARN
