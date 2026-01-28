@@ -16,11 +16,11 @@ pipeline {
     environment {
         APP_NAME = 'audit-management'
         DOCKER_REGISTRY = 'docker.io'
-        DOCKER_IMAGE = "${DOCKER_REGISTRY}/YOUR_DOCKERHUB_USERNAME/audit-management"
+        DOCKER_IMAGE = "${DOCKER_REGISTRY}/aniszix/audit-management"
         DOCKER_TAG = "${BUILD_NUMBER}"
         SONAR_HOST = 'https://sonarcloud.io'
-        SONAR_PROJECT_KEY = 'audit-management'
-        SONAR_ORGANIZATION = 'your-organization'
+        SONAR_PROJECT_KEY = 'aniszix_audit-management'
+        SONAR_ORGANIZATION = 'aniszix'
         // Credentials (à configurer dans Jenkins)
         SONAR_TOKEN = credentials('sonarcloud-token')
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')

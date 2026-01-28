@@ -30,7 +30,7 @@ spec:
     spec:
       containers:
         - name: audit-management
-          image: YOUR_DOCKERHUB_USERNAME/audit-management:latest
+          image: aniszix/audit-management:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8081
