@@ -13,6 +13,21 @@ jobs:
     name: Build and Analyze
     runs-on: ubuntu-latest
     
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: auditdb
+          POSTGRES_USER: anis
+          POSTGRES_PASSWORD: anis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,6 +49,10 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
       
       - name: Build and Test with Coverage
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/auditdb
+          SPRING_DATASOURCE_USERNAME: anis
+          SPRING_DATASOURCE_PASSWORD: anis
         run: mvn clean verify jacoco:report -B
       
       - name: SonarCloud Scan
