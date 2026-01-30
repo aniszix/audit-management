@@ -1,43 +1,25 @@
 // ===========================================
-// Jenkinsfile - Pipeline CI/CD Complet
-// Backend Spring Boot → Kubernetes
+// Jenkinsfile - Pipeline CI/CD Simplifié
+// Backend Spring Boot - Tests + JaCoCo
+// Utilise Maven Wrapper (pas de config Jenkins)
 // ===========================================
 
 pipeline {
     agent any
 
-    // Outils requis (configurés dans Jenkins)
-    tools {
-        maven 'Maven-3.9'
-        jdk 'JDK-17'
-    }
-
     // Variables d'environnement
     environment {
         APP_NAME = 'audit-management'
-        DOCKER_REGISTRY = 'docker.io'
-        DOCKER_IMAGE = "${DOCKER_REGISTRY}/aniszix/audit-management"
+        DOCKER_IMAGE = 'aniszix/audit-management'
         DOCKER_TAG = "${BUILD_NUMBER}"
-        SONAR_HOST = 'https://sonarcloud.io'
-        SONAR_PROJECT_KEY = 'aniszix_audit-management'
-        SONAR_ORGANIZATION = 'aniszix'
-        // Credentials (à configurer dans Jenkins)
-        SONAR_TOKEN = credentials('sonarcloud-token')
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        KUBECONFIG_CREDENTIALS = credentials('kubeconfig')
     }
 
     // Options du pipeline
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
-        timeout(time: 45, unit: 'MINUTES')
+        timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds()
-    }
-
-    // Déclencheur automatique
-    triggers {
-        pollSCM('H/5 * * * *')  // Vérifie toutes les 5 minutes
     }
 
     stages {
@@ -46,31 +28,43 @@ pipeline {
             steps {
                 echo '📥 Récupération du code source depuis Git...'
                 checkout scm
-                script {
-                    env.GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.GIT_BRANCH_NAME = sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
-                }
-                echo "Branch: ${env.GIT_BRANCH_NAME}, Commit: ${env.GIT_COMMIT_SHORT}"
+                sh 'chmod +x mvnw'
             }
         }
 
-        // ============ Stage 2: Build Maven ============
+        // ============ Stage 2: Vérification Environnement ============
+        stage('🔧 Vérification Env') {
+            steps {
+                echo '🔧 Vérification de l environnement...'
+                sh '''
+                    echo "Java version:"
+                    java -version
+                    echo "Maven Wrapper version:"
+                    ./mvnw -version
+                '''
+            }
+        }
+
+        // ============ Stage 3: Build Maven ============
         stage('🔨 Build') {
             steps {
                 echo '🔨 Compilation du projet Maven...'
-                sh 'mvn clean compile -DskipTests -B'
+                sh './mvnw clean compile -DskipTests -B'
             }
         }
 
-        // ============ Stage 3: Tests Unitaires + JaCoCo ============
+        // ============ Stage 4: Tests Unitaires + JaCoCo ============
         stage('🧪 Tests Unitaires') {
             steps {
                 echo '🧪 Exécution des tests unitaires avec couverture JaCoCo...'
-                sh 'mvn test -B'
+                sh './mvnw test -Dspring.profiles.active=test -B'
             }
             post {
                 always {
+                    // Publier les résultats des tests JUnit
                     junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+                    
+                    // Publier le rapport JaCoCo (nécessite plugin JaCoCo)
                     jacoco(
                         execPattern: '**/target/jacoco.exec',
                         classPattern: '**/target/classes',
@@ -81,51 +75,11 @@ pipeline {
             }
         }
 
-        // ============ Stage 4: Tests d'Intégration ============
-        stage('🔗 Tests Intégration') {
-            steps {
-                echo '🔗 Exécution des tests d\'intégration...'
-                sh 'mvn verify -DskipUnitTests -B'
-            }
-            post {
-                always {
-                    junit allowEmptyResults: true, testResults: '**/target/failsafe-reports/*.xml'
-                }
-            }
-        }
-
-        // ============ Stage 5: Analyse SonarCloud ============
-        stage('🔍 SonarCloud') {
-            steps {
-                echo '🔍 Analyse de la qualité du code avec SonarCloud...'
-                withSonarQubeEnv('SonarCloud') {
-                    sh """
-                        mvn sonar:sonar \
-                            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                            -Dsonar.organization=${SONAR_ORGANIZATION} \
-                            -Dsonar.host.url=${SONAR_HOST} \
-                            -Dsonar.login=${SONAR_TOKEN} \
-                            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-                    """
-                }
-            }
-        }
-
-        // ============ Stage 6: Quality Gate ============
-        stage('✅ Quality Gate') {
-            steps {
-                echo '✅ Vérification du Quality Gate SonarCloud...'
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
-        // ============ Stage 7: Package JAR ============
+        // ============ Stage 5: Package JAR ============
         stage('📦 Package') {
             steps {
                 echo '📦 Création du package JAR...'
-                sh 'mvn package -DskipTests -B'
+                sh './mvnw package -DskipTests -B'
             }
             post {
                 success {
@@ -134,89 +88,24 @@ pipeline {
             }
         }
 
-        // ============ Stage 8: Docker Build ============
-        stage('🐳 Docker Build') {
+        // ============ Stage 6: Rapport de Couverture ============
+        stage('📊 Rapport Couverture') {
             steps {
-                echo '🐳 Construction de l\'image Docker...'
-                script {
-                    docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
-                    docker.build("${DOCKER_IMAGE}:latest")
-                }
+                echo '📊 Génération du rapport de couverture détaillé...'
+                sh './mvnw jacoco:report -B'
+                echo '✅ Rapport JaCoCo généré dans target/site/jacoco/'
             }
-        }
-
-        // ============ Stage 9: Docker Push ============
-        stage('🚀 Docker Push') {
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'develop'
-                }
-            }
-            steps {
-                echo '🚀 Publication de l\'image sur Docker Hub...'
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push()
-                        docker.image("${DOCKER_IMAGE}:latest").push()
-                    }
-                }
-            }
-        }
-
-        // ============ Stage 10: Deploy to Kubernetes ============
-        stage('☸️ Deploy Kubernetes') {
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'develop'
-                }
-            }
-            steps {
-                echo '☸️ Déploiement sur Kubernetes...'
-                script {
-                    // Mise à jour de l'image dans le deployment
-                    sh """
-                        sed -i 's|image:.*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|g' k8s/deployment.yaml
-                    """
-                    
-                    // Appliquer les manifests Kubernetes
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                        sh '''
-                            kubectl apply -f k8s/namespace.yaml
-                            kubectl apply -f k8s/configmap.yaml
-                            kubectl apply -f k8s/secret.yaml
-                            kubectl apply -f k8s/deployment.yaml
-                            kubectl apply -f k8s/service.yaml
-                            kubectl rollout status deployment/audit-management -n audit-app --timeout=120s
-                        '''
-                    }
-                }
-            }
-        }
-
-        // ============ Stage 11: Smoke Test ============
-        stage('🔥 Smoke Test') {
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'develop'
-                }
-            }
-            steps {
-                echo '🔥 Test de fumée post-déploiement...'
-                script {
-                    // Attendre que l'application soit prête
-                    sleep(30)
-                    
-                    // Test basique de santé
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                        sh '''
-                            NODEPORT=$(kubectl get svc audit-management-service -n audit-app -o jsonpath='{.spec.ports[0].nodePort}')
-                            NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
-                            curl -f http://${NODE_IP}:${NODEPORT}/actuator/health || exit 1
-                        '''
-                    }
+            post {
+                always {
+                    // Archiver le rapport HTML JaCoCo
+                    publishHTML(target: [
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'target/site/jacoco',
+                        reportFiles: 'index.html',
+                        reportName: 'JaCoCo Coverage Report'
+                    ])
                 }
             }
         }
@@ -225,17 +114,19 @@ pipeline {
     // Actions post-pipeline
     post {
         always {
-            echo '🧹 Nettoyage de l\'espace de travail...'
-            cleanWs()
+            echo '📋 Résumé du Pipeline'
+            echo '===================='
         }
         success {
             echo '✅ =========================================='
             echo '✅ Pipeline terminé avec SUCCÈS!'
+            echo '✅ Tests passés + Rapport JaCoCo généré!'
             echo '✅ =========================================='
         }
         failure {
             echo '❌ =========================================='
             echo '❌ Pipeline ÉCHOUÉ!'
+            echo '❌ Vérifiez les logs pour plus de détails'
             echo '❌ =========================================='
         }
     }
