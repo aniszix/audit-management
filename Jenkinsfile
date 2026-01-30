@@ -1,7 +1,7 @@
 // ===========================================
 // Jenkinsfile - Pipeline CI/CD Simplifié
 // Backend Spring Boot - Tests + JaCoCo
-// Utilise Maven Wrapper (pas de config Jenkins)
+// Utilise Maven Wrapper (pas de plugins requis)
 // ===========================================
 
 pipeline {
@@ -24,18 +24,18 @@ pipeline {
 
     stages {
         // ============ Stage 1: Checkout ============
-        stage('📥 Checkout') {
+        stage('Checkout') {
             steps {
-                echo '📥 Récupération du code source depuis Git...'
+                echo '=== Recuperation du code source depuis Git ==='
                 checkout scm
                 sh 'chmod +x mvnw'
             }
         }
 
         // ============ Stage 2: Vérification Environnement ============
-        stage('🔧 Vérification Env') {
+        stage('Verification Env') {
             steps {
-                echo '🔧 Vérification de l environnement...'
+                echo '=== Verification de l environnement ==='
                 sh '''
                     echo "Java version:"
                     java -version
@@ -46,39 +46,31 @@ pipeline {
         }
 
         // ============ Stage 3: Build Maven ============
-        stage('🔨 Build') {
+        stage('Build') {
             steps {
-                echo '🔨 Compilation du projet Maven...'
+                echo '=== Compilation du projet Maven ==='
                 sh './mvnw clean compile -DskipTests -B'
             }
         }
 
         // ============ Stage 4: Tests Unitaires + JaCoCo ============
-        stage('🧪 Tests Unitaires') {
+        stage('Tests Unitaires') {
             steps {
-                echo '🧪 Exécution des tests unitaires avec couverture JaCoCo...'
+                echo '=== Execution des tests unitaires avec couverture JaCoCo ==='
                 sh './mvnw test -Dspring.profiles.active=test -B'
             }
             post {
                 always {
                     // Publier les résultats des tests JUnit
                     junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
-                    
-                    // Publier le rapport JaCoCo (nécessite plugin JaCoCo)
-                    jacoco(
-                        execPattern: '**/target/jacoco.exec',
-                        classPattern: '**/target/classes',
-                        sourcePattern: '**/src/main/java',
-                        exclusionPattern: '**/test/**'
-                    )
                 }
             }
         }
 
         // ============ Stage 5: Package JAR ============
-        stage('📦 Package') {
+        stage('Package') {
             steps {
-                echo '📦 Création du package JAR...'
+                echo '=== Creation du package JAR ==='
                 sh './mvnw package -DskipTests -B'
             }
             post {
@@ -89,23 +81,27 @@ pipeline {
         }
 
         // ============ Stage 6: Rapport de Couverture ============
-        stage('📊 Rapport Couverture') {
+        stage('Rapport Couverture') {
             steps {
-                echo '📊 Génération du rapport de couverture détaillé...'
+                echo '=== Generation du rapport de couverture detaille ==='
                 sh './mvnw jacoco:report -B'
-                echo '✅ Rapport JaCoCo généré dans target/site/jacoco/'
+                echo '=== Rapport JaCoCo genere dans target/site/jacoco/ ==='
+                
+                // Afficher le résumé de couverture
+                sh '''
+                    echo "=== Resume de la couverture de code ==="
+                    if [ -f target/site/jacoco/index.html ]; then
+                        echo "Rapport JaCoCo HTML genere avec succes!"
+                        ls -la target/site/jacoco/
+                    else
+                        echo "Attention: Rapport JaCoCo non trouve"
+                    fi
+                '''
             }
             post {
-                always {
-                    // Archiver le rapport HTML JaCoCo
-                    publishHTML(target: [
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'target/site/jacoco',
-                        reportFiles: 'index.html',
-                        reportName: 'JaCoCo Coverage Report'
-                    ])
+                success {
+                    // Archiver le rapport JaCoCo comme artefact
+                    archiveArtifacts artifacts: 'target/site/jacoco/**/*', allowEmptyArchive: true
                 }
             }
         }
@@ -114,20 +110,21 @@ pipeline {
     // Actions post-pipeline
     post {
         always {
-            echo '📋 Résumé du Pipeline'
-            echo '===================='
+            echo '=========================================='
+            echo 'Resume du Pipeline'
+            echo '=========================================='
         }
         success {
-            echo '✅ =========================================='
-            echo '✅ Pipeline terminé avec SUCCÈS!'
-            echo '✅ Tests passés + Rapport JaCoCo généré!'
-            echo '✅ =========================================='
+            echo '=========================================='
+            echo 'Pipeline termine avec SUCCES!'
+            echo 'Tests passes + Rapport JaCoCo genere!'
+            echo '=========================================='
         }
         failure {
-            echo '❌ =========================================='
-            echo '❌ Pipeline ÉCHOUÉ!'
-            echo '❌ Vérifiez les logs pour plus de détails'
-            echo '❌ =========================================='
+            echo '=========================================='
+            echo 'Pipeline ECHOUE!'
+            echo 'Verifiez les logs pour plus de details'
+            echo '=========================================='
         }
     }
 }
